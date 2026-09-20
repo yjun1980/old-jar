@@ -1,0 +1,57 @@
+name: 构建Jar 并推送到gitee
+
+on: workflow_dispatch
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: set up JDK 17
+      uses: actions/setup-java@v3
+      with:
+        java-version: '17'
+        distribution: 'adopt'
+        cache: gradle
+
+    - name: Build with Gradle
+      run: ./buildAndGenJar.bat ec
+
+    - name: Update spider jar (GitHub)
+      uses: EndBug/add-and-commit@v7
+      with:
+        default_author: github_actions
+        message: 'update spider jar'
+        add: "['./jar/custom_spider.jar', './jar/custom_spider.jar.md5']"
+
+    # ---------- 推送到 Gitee（私人令牌） ----------
+    - name: Push jar to Gitee
+      shell: bash
+      env:
+        GITEE_USERNAME: ${{ secrets.GITEE_USERNAME }}
+        GITEE_TOKEN:    ${{ secrets.GITEE_TOKEN }}
+        GITEE_REPO:     ${{ secrets.GITEE_REPO }}
+      run: |
+        set -e
+
+        git config --global user.name  "github-actions"
+        git config --global user.email "github-actions@users.noreply.github.com"
+
+        cd "$RUNNER_TEMP"
+        # 用用户名 + 令牌拼 HTTPS 地址 clone
+        git clone --depth=1 "https://${GITEE_USERNAME}:${GITEE_TOKEN}@${GITEE_REPO}" gitee_repo
+        cd gitee_repo
+
+        mkdir -p jar
+        cp "$GITHUB_WORKSPACE/jar/custom_spider.jar"     jar/
+        cp "$GITHUB_WORKSPACE/jar/custom_spider.jar.md5" jar/
+
+        git add jar/custom_spider.jar jar/custom_spider.jar.md5
+        if git diff --cached --quiet; then
+          echo "No changes to push."
+        else
+          git commit -m "update spider jar $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+          git push origin HEAD:master
+        fi
