@@ -1,4 +1,4 @@
-name: 构建Jar 并推送到gitee
+name: Spider Jar 并推送
 
 on: workflow_dispatch
 
@@ -32,7 +32,7 @@ jobs:
       env:
         GITEE_USERNAME: ${{ secrets.GITEE_USERNAME }}
         GITEE_TOKEN:    ${{ secrets.GITEE_TOKEN }}
-        GITEE_REPO:     ${{ secrets.GITEE_REPO }}
+        GITEE_REPO:     ${{ secrets.GITEE_REPO }}   # 值就是 gyjune/jar
       run: |
         set -e
 
@@ -40,8 +40,11 @@ jobs:
         git config --global user.email "github-actions@users.noreply.github.com"
 
         cd "$RUNNER_TEMP"
-        # 用用户名 + 令牌拼 HTTPS 地址 clone
-        git clone --depth=1 "https://${GITEE_USERNAME}:${GITEE_TOKEN}@${GITEE_REPO}" gitee_repo
+
+        # 拼接成 https://用户名:令牌@gitee.com/gyjune/jar.git
+        REMOTE_URL="https://${GITEE_USERNAME}:${GITEE_TOKEN}@gitee.com/${GITEE_REPO}.git"
+
+        git clone --depth=1 "$REMOTE_URL" gitee_repo
         cd gitee_repo
 
         mkdir -p jar
@@ -49,6 +52,7 @@ jobs:
         cp "$GITHUB_WORKSPACE/jar/custom_spider.jar.md5" jar/
 
         git add jar/custom_spider.jar jar/custom_spider.jar.md5
+
         if git diff --cached --quiet; then
           echo "No changes to push."
         else
