@@ -3,19 +3,16 @@ package com.github.catvod.spider;
 import android.content.Context;
 import android.text.TextUtils;
 
-import com.github.catvod.bean.Class;
-import com.github.catvod.bean.Result;
-import com.github.catvod.bean.Vod;
 import com.github.catvod.crawler.Spider;
 import com.github.catvod.crawler.SpiderDebug;
-import com.github.catvod.utils.Json;
 import com.github.catvod.utils.okhttp.OkHttpUtil;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonObject;
 
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -24,8 +21,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * yatv 直播源播放器（Java 版 · PiaoHua 旧版风格）
- * 支持：txt（,#genre# 分组）+ m3u/m3u8（group-title 分组）
+ * Live 直播源播放器（PiaoHua 旧版风格）
  */
 public class Live extends Spider {
 
@@ -36,16 +32,10 @@ public class Live extends Spider {
         HEADERS.put("User-Agent", UA);
     }
 
-    // 源配置：[{name, url, pic}]
     private List<Source> sources = new ArrayList<>();
-    // 缓存：线路名 -> {分类名 -> [频道]}
     private final Map<String, Map<String, List<Channel>>> dataCache = new HashMap<>();
-    // 当前 extend 参数
     private String extend;
 
-    // ============================================================
-    // 内部数据类
-    // ============================================================
     private static class Source {
         String name;
         String url;
@@ -57,9 +47,6 @@ public class Live extends Spider {
         String url;
     }
 
-    // ============================================================
-    // ★ fetchText —— PiaoHua 风格
-    // ============================================================
     private String fetchText(String url) {
         try {
             Request request = new Request.Builder()
@@ -67,9 +54,8 @@ public class Live extends Spider {
                     .get()
                     .url(url)
                     .build();
-
-            OkHttpClient okHttpClient = OkHttpUtil.defaultClient();
-            Response response = okHttpClient.newCall(request).execute();
+            OkHttpClient client = OkHttpUtil.defaultClient();
+            Response response = client.newCall(request).execute();
             if (response.body() == null) return "";
             byte[] bytes = response.body().bytes();
             response.close();
@@ -80,9 +66,6 @@ public class Live extends Spider {
         }
     }
 
-    // ============================================================
-    // init：加载源配置
-    // ============================================================
     @Override
     public void init(Context context, String extend) {
         this.extend = extend;
@@ -94,82 +77,62 @@ public class Live extends Spider {
     private void loadSources() {
         if (TextUtils.isEmpty(extend)) return;
         if (!extend.startsWith("http")) {
-            SpiderDebug.log("YaTV: extend 不是 URL，只支持 URL 方式");
+            SpiderDebug.log("Live: extend 不是 URL");
             return;
         }
-
         String content = fetchText(extend);
         if (TextUtils.isEmpty(content)) return;
-
         try {
-            JsonArray arr = Json.parse(content).getAsJsonArray();
-            for (int i = 0; i < arr.size(); i++) {
-                JsonObject obj = arr.get(i).getAsJsonObject();
+            JSONArray arr = new JSONArray(content);
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject obj = arr.optJSONObject(i);
+                if (obj == null) continue;
                 Source src = new Source();
-                src.name = obj.has("name") ? obj.get("name").getAsString() : "";
-                src.url  = obj.has("url")  ? obj.get("url").getAsString()  : "";
-                src.pic  = obj.has("pic")  ? obj.get("pic").getAsString()  : "";
+                src.name = obj.optString("name", "");
+                src.url  = obj.optString("url", "");
+                src.pic  = obj.optString("pic", "");
 
-                // 处理 &&& 分隔 pic
                 if (src.url.contains("&&&")) {
                     String[] parts = src.url.split("&&&");
                     src.url = parts[0];
                     if (parts.length > 1) src.pic = parts[1];
                 }
-
                 if (!TextUtils.isEmpty(src.name) && !TextUtils.isEmpty(src.url)) {
                     sources.add(src);
                 }
             }
         } catch (Exception e) {
-            SpiderDebug.log("YaTV loadSources error: " + e.getMessage());
+            SpiderDebug.log("loadSources error: " + e.getMessage());
         }
     }
 
-    // ============================================================
-    // 拉取单个源的文本，解析成分类
-    // ============================================================
     private Map<String, List<Channel>> getSourceData(String name, String url) {
         if (dataCache.containsKey(name)) return dataCache.get(name);
-
         String content = fetchText(url);
         if (TextUtils.isEmpty(content)) {
             Map<String, List<Channel>> empty = new HashMap<>();
             dataCache.put(name, empty);
             return empty;
         }
-
         Map<String, List<Channel>> parsed;
         String head = content.length() > 2000 ? content.substring(0, 2000) : content;
-        if (head.contains("#EXTM3U") || head.contains("#EXTINF")) {
-            parsed = parseM3U(content);
-        } else {
-            parsed = parseTxt(content);
-        }
-
+        if (head.contains("#EXTM3U") || head.contains("#EXTINF")) parsed = parseM3U(content);
+        else parsed = parseTxt(content);
         dataCache.put(name, parsed);
         return parsed;
     }
 
-    // ============================================================
-    // 解析 txt（,#genre# 分组）
-    // ============================================================
     private Map<String, List<Channel>> parseTxt(String content) {
         Map<String, List<Channel>> result = new LinkedHashMap<>();
         String current = "未分类";
-
         for (String raw : content.split("\n")) {
             String line = raw.trim();
             if (TextUtils.isEmpty(line)) continue;
-
-            // 分组行：xxx,#genre#
             if (line.endsWith(",#genre#")) {
                 current = line.replace(",#genre#", "").trim();
                 result.computeIfAbsent(current, k -> new ArrayList<>());
                 continue;
             }
-
-            // 频道行：名字,URL
             if (line.contains(",")) {
                 int idx = line.indexOf(',');
                 String name = line.substring(0, idx).trim();
@@ -186,20 +149,14 @@ public class Live extends Spider {
         return result;
     }
 
-    // ============================================================
-    // 解析 m3u（group-title 分组）
-    // ============================================================
     private Map<String, List<Channel>> parseM3U(String content) {
         Map<String, List<Channel>> result = new LinkedHashMap<>();
         String name = null;
         String group = "未分类";
-
         for (String raw : content.split("\n")) {
             String line = raw.trim();
             if (TextUtils.isEmpty(line)) continue;
-
             if (line.startsWith("#EXTINF")) {
-                // 取 group-title="xxx"
                 int gStart = line.indexOf("group-title=\"");
                 if (gStart >= 0) {
                     int gEnd = line.indexOf("\"", gStart + 13);
@@ -208,7 +165,6 @@ public class Live extends Spider {
                         group = TextUtils.isEmpty(g) ? "未分类" : g;
                     }
                 }
-                // 取最后一个逗号后的名称
                 int comma = line.lastIndexOf(',');
                 if (comma >= 0) {
                     name = line.substring(comma + 1).trim();
@@ -230,122 +186,137 @@ public class Live extends Spider {
         return result;
     }
 
-    // ============================================================
-    // homeContent：源名 = 分类（不变）
-    // ============================================================
+    // ★ homeContent：手拼 JSON
     @Override
     public String homeContent(boolean filter) {
-        List<Class> classes = new ArrayList<>();
-        for (Source src : sources) {
-            classes.add(new Class(src.name, src.name));
+        try {
+            JSONObject result = new JSONObject();
+            JSONArray classes = new JSONArray();
+            for (Source src : sources) {
+                JSONObject o = new JSONObject();
+                o.put("type_id", src.name);
+                o.put("type_name", src.name);
+                o.put("type_pic", src.pic);
+                classes.put(o);
+            }
+            result.put("class", classes);
+            result.put("filters", new JSONObject());
+            return result.toString();
+        } catch (Exception e) {
+            SpiderDebug.log("homeContent error: " + e.getMessage());
+            return "";
         }
-        return Result.string(classes);
     }
 
-    // ============================================================
-    // categoryContent：列分类（不变）
-    // ============================================================
     @Override
     public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) {
-        int page = 1;
-        try { page = Integer.parseInt(pg); } catch (Exception ignored) {}
-        int start = (page - 1) * 50;
+        try {
+            int page = 1;
+            try { page = Integer.parseInt(pg); } catch (Exception ignored) {}
+            int start = (page - 1) * 50;
 
-        String url = "";
-        String pic = "";
-        for (Source src : sources) {
-            if (src.name.equals(tid)) {
-                url = src.url;
-                pic = src.pic;
-                break;
+            String url = "";
+            String pic = "";
+            for (Source src : sources) {
+                if (src.name.equals(tid)) {
+                    url = src.url;
+                    pic = src.pic;
+                    break;
+                }
             }
-        }
 
-        List<Vod> videos = new ArrayList<>();
-        int total = 0;
-
-        if (!TextUtils.isEmpty(url)) {
-            Map<String, List<Channel>> data = getSourceData(tid, url);
-            List<String> cats = new ArrayList<>(data.keySet());
-            total = cats.size();
-
-            int end = Math.min(start + 50, cats.size());
-            for (int i = start; i < end; i++) {
-                String cat = cats.get(i);
-                Vod v = new Vod();
-                v.setVodId(tid + "||" + cat);
-                v.setVodName(cat);
-                v.setVodPic(pic);
-                v.setVodRemarks(data.get(cat).size() + "个频道");
-                videos.add(v);
+            JSONArray videos = new JSONArray();
+            int total = 0;
+            if (!TextUtils.isEmpty(url)) {
+                Map<String, List<Channel>> data = getSourceData(tid, url);
+                List<String> cats = new ArrayList<>(data.keySet());
+                total = cats.size();
+                int end = Math.min(start + 50, cats.size());
+                for (int i = start; i < end; i++) {
+                    String cat = cats.get(i);
+                    JSONObject v = new JSONObject();
+                    v.put("vod_id", tid + "||" + cat);
+                    v.put("vod_name", cat);
+                    v.put("vod_pic", pic);
+                    v.put("vod_remarks", data.get(cat).size() + "个频道");
+                    videos.put(v);
+                }
             }
-        }
+            int pagecount = total > 0 ? (total + 49) / 50 : 1;
 
-        int pagecount = total > 0 ? (total + 49) / 50 : 1;
-        return Result.get()
-                .vod(videos)
-                .page(page, pagecount, 50, total)
-                .string();
+            JSONObject r = new JSONObject();
+            r.put("list", videos);
+            r.put("page", page);
+            r.put("pagecount", pagecount);
+            r.put("limit", 50);
+            r.put("total", total);
+            return r.toString();
+        } catch (Exception e) {
+            SpiderDebug.log("categoryContent error: " + e.getMessage());
+            return "";
+        }
     }
 
-    // ============================================================
-    // detailContent：分类 -> 频道列表（不变）
-    // ============================================================
+    // ★ detailContent：手拼 JSON
     @Override
     public String detailContent(List<String> ids) {
-        String vid = ids.get(0);
-        Vod info = new Vod();
-        info.setVodId(vid);
+        try {
+            String vid = ids.get(0);
+            JSONObject info = new JSONObject();
+            info.put("vod_id", vid);
 
-        if (!vid.contains("||")) return Result.string(info);
+            if (!vid.contains("||")) {
+                JSONArray arr = new JSONArray();
+                arr.put(info);
+                JSONObject r = new JSONObject();
+                r.put("list", arr);
+                return r.toString();
+            }
 
-        String[] parts = vid.split("\\|\\|");
+            String[] parts = vid.split("\\|\\|");
 
-        // 情况 1：点到具体频道（src||cat||channel）
-        if (parts.length == 3) {
-            String src = parts[0], cat = parts[1], ch = parts[2];
-            Map<String, List<Channel>> data = dataCache.get(src);
-            if (data != null && data.containsKey(cat)) {
-                for (Channel item : data.get(cat)) {
-                    if (item.name.equals(ch)) {
-                        info.setVodName(ch);
-                        info.setVodRemarks(src + " · " + cat);
-                        info.setVodPlayFrom("播放");
-                        info.setVodPlayUrl(ch + "$" + item.url);
-                        info.setVodContent("线路: " + src + "\n分类: " + cat);
-                        return Result.string(info);
+            if (parts.length == 3) {
+                String src = parts[0], cat = parts[1], ch = parts[2];
+                Map<String, List<Channel>> data = dataCache.get(src);
+                if (data != null && data.containsKey(cat)) {
+                    for (Channel item : data.get(cat)) {
+                        if (item.name.equals(ch)) {
+                            info.put("vod_name", ch);
+                            info.put("vod_remarks", src + " · " + cat);
+                            info.put("vod_play_from", "播放");
+                            info.put("vod_play_url", ch + "$" + item.url);
+                            info.put("vod_content", "线路: " + src + "\n分类: " + cat);
+                            break;
+                        }
                     }
                 }
-            }
-        }
-
-        // 情况 2：点到分类（src||cat）
-        if (parts.length >= 2) {
-            String src = parts[0], cat = parts[1];
-            Map<String, List<Channel>> data = dataCache.get(src);
-            if (data != null && data.containsKey(cat)) {
-                List<Channel> chList = data.get(cat);
-                info.setVodName(cat);
-                info.setVodRemarks(src + " · " + chList.size() + "个频道");
-
-                List<String> playUrls = new ArrayList<>();
-                for (Channel item : chList) {
-                    playUrls.add(item.name + "$" + item.url);
+            } else if (parts.length >= 2) {
+                String src = parts[0], cat = parts[1];
+                Map<String, List<Channel>> data = dataCache.get(src);
+                if (data != null && data.containsKey(cat)) {
+                    List<Channel> chList = data.get(cat);
+                    info.put("vod_name", cat);
+                    info.put("vod_remarks", src + " · " + chList.size() + "个频道");
+                    List<String> playUrls = new ArrayList<>();
+                    for (Channel item : chList) playUrls.add(item.name + "$" + item.url);
+                    info.put("vod_play_from", cat);
+                    info.put("vod_play_url", TextUtils.join("#", playUrls));
+                    info.put("vod_content", "线路: " + src + "\n分类: " + cat + "\n频道数: " + chList.size());
                 }
-
-                info.setVodPlayFrom(cat);
-                info.setVodPlayUrl(TextUtils.join("#", playUrls));
-                info.setVodContent("线路: " + src + "\n分类: " + cat + "\n频道数: " + chList.size());
-                return Result.string(info);
             }
-        }
 
-        return Result.string(info);
+            JSONArray list = new JSONArray();
+            list.put(info);
+            JSONObject r = new JSONObject();
+            r.put("list", list);
+            return r.toString();
+        } catch (Exception e) {
+            SpiderDebug.log("detailContent error: " + e.getMessage());
+            return "";
+        }
     }
 
-    // ============================================================
-    // searchContent（不变）
-    // ============================================================
+    // ★ searchContent：手拼 JSON
     @Override
     public String searchContent(String key, boolean quick) {
         return searchContent(key, quick, "1");
@@ -353,45 +324,51 @@ public class Live extends Spider {
 
     @Override
     public String searchContent(String key, boolean quick, String pg) {
-        List<Vod> results = new ArrayList<>();
-        String lower = key.toLowerCase();
-
-        for (Map.Entry<String, Map<String, List<Channel>>> entry : dataCache.entrySet()) {
-            String src = entry.getKey();
-            for (Map.Entry<String, List<Channel>> catEntry : entry.getValue().entrySet()) {
-                String cat = catEntry.getKey();
-                for (Channel item : catEntry.getValue()) {
-                    if (item.name.toLowerCase().contains(lower)) {
-                        Vod v = new Vod();
-                        v.setVodId(src + "||" + cat + "||" + item.name);
-                        v.setVodName("[" + src + "] " + item.name);
-                        v.setVodPic("");
-                        v.setVodRemarks(cat);
-                        results.add(v);
-                        if (results.size() >= 50) break;
+        try {
+            JSONArray results = new JSONArray();
+            String lower = key.toLowerCase();
+            outer:
+            for (Map.Entry<String, Map<String, List<Channel>>> entry : dataCache.entrySet()) {
+                String src = entry.getKey();
+                for (Map.Entry<String, List<Channel>> catEntry : entry.getValue().entrySet()) {
+                    String cat = catEntry.getKey();
+                    for (Channel item : catEntry.getValue()) {
+                        if (item.name.toLowerCase().contains(lower)) {
+                            JSONObject v = new JSONObject();
+                            v.put("vod_id", src + "||" + cat + "||" + item.name);
+                            v.put("vod_name", "[" + src + "] " + item.name);
+                            v.put("vod_pic", "");
+                            v.put("vod_remarks", cat);
+                            results.put(v);
+                            if (results.length() >= 50) break outer;
+                        }
                     }
                 }
             }
+            JSONObject r = new JSONObject();
+            r.put("list", results);
+            r.put("page", 1);
+            r.put("pagecount", 1);
+            r.put("limit", 50);
+            r.put("total", results.length());
+            return r.toString();
+        } catch (Exception e) {
+            SpiderDebug.log("searchContent error: " + e.getMessage());
+            return "";
         }
-
-        return Result.get()
-                .vod(results)
-                .page(1, 1, 50, results.size())
-                .string();
     }
 
-    // ============================================================
-    // ★★ playerContent —— 一字未改 ★★
-    // ============================================================
+    // ★ playerContent 一字未改
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) {
-        return Result.get().url(id).header(HEADERS).string();
-    }
-
-    // ============================================================
-    // destroy（去掉 @Override）
-    // ============================================================
-    public void destroy() {
-        dataCache.clear();
+        try {
+            JSONObject r = new JSONObject();
+            r.put("parse", 0);
+            r.put("url", id);
+            r.put("header", new JSONObject(HEADERS));
+            return r.toString();
+        } catch (Exception e) {
+            return "";
+        }
     }
 }

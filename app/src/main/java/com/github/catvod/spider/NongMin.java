@@ -24,7 +24,7 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class NongMin extends Spider {
+public class Nm extends Spider {
 
     private static final String DEFAULT_HOST = "https://vip.wwgz.cn:5200";
     private String host = DEFAULT_HOST;
@@ -33,32 +33,15 @@ public class NongMin extends Spider {
 
     private Map<String, String> headers;
 
-    // ============================================================
-    // ★ 静态 Pattern 常量（PiaoHua 风格）
-    // ============================================================
     private static final Pattern LI_PATTERN = Pattern.compile("<li[^>]*>([\\s\\S]*?)</li>");
-
-    private static final Pattern DETAIL_HREF_PATTERN = Pattern.compile(
-        "<a[^>]*href=\"([^\"]*vod-detail-id[^\"]*)\"");
-
-    private static final Pattern S_DES_PATTERN = Pattern.compile(
-        "<[^>]*class=\"[^\"]*sDes[^\"]*\"[^>]*>([^<]+)</");
-
-    private static final Pattern TITLE_ATTR_PATTERN = Pattern.compile(
-        "<a[^>]*title=\"([^\"]*)\"");
-
+    private static final Pattern DETAIL_HREF_PATTERN = Pattern.compile("<a[^>]*href=\"([^\"]*vod-detail-id[^\"]*)\"");
+    private static final Pattern S_DES_PATTERN = Pattern.compile("<[^>]*class=\"[^\"]*sDes[^\"]*\"[^>]*>([^<]+)</");
+    private static final Pattern TITLE_ATTR_PATTERN = Pattern.compile("<a[^>]*title=\"([^\"]*)\"");
     private static final Pattern ACTOR_A_PATTERN = Pattern.compile(">([^<]+)</a>");
-
     private static final Pattern TAB_LI_PATTERN = Pattern.compile("<li[^>]*>[\\s\\S]*?</li>");
-
     private static final Pattern NUM_PATTERN = Pattern.compile("\\d+");
+    private static final Pattern NM_PLAYER_URL_PATTERN = Pattern.compile("\"url\"\\s*:\\s*\"([^\"]+)\"");
 
-    private static final Pattern NM_PLAYER_URL_PATTERN = Pattern.compile(
-        "\"url\"\\s*:\\s*\"([^\"]+)\"");
-
-    // ============================================================
-    // init
-    // ============================================================
     @Override
     public void init(android.content.Context context, String extend) {
         if (!TextUtils.isEmpty(extend)) {
@@ -70,9 +53,6 @@ public class NongMin extends Spider {
         }
     }
 
-    // ============================================================
-    // headers（惰性构造）
-    // ============================================================
     private Map<String, String> getHeaders() {
         if (headers != null) return headers;
         headers = new HashMap<>();
@@ -85,26 +65,17 @@ public class NongMin extends Spider {
         return headers;
     }
 
-    // ============================================================
-    // ★ fetch —— 改成 PiaoHua 风格
-    // ============================================================
     private String fetch(String url, String referer) {
         try {
             Request.Builder builder = new Request.Builder()
                     .addHeader("User-Agent", UA)
-                    .addHeader("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
                     .addHeader("accept-language", "zh-CN,zh;q=0.9")
-                    .addHeader("cache-control", "no-cache")
-                    .addHeader("pragma", "no-cache")
-                    .addHeader("upgrade-insecure-requests", "1")
                     .addHeader("Referer", TextUtils.isEmpty(referer) ? (host + "/") : referer)
-                    .addHeader("sec-fetch-site", TextUtils.isEmpty(referer) ? "none" : "same-origin")
                     .get()
                     .url(url);
-
             Request request = builder.build();
-            OkHttpClient okHttpClient = OkHttpUtil.defaultClient();
-            Response response = okHttpClient.newCall(request).execute();
+            OkHttpClient client = OkHttpUtil.defaultClient();
+            Response response = client.newCall(request).execute();
             if (response.body() == null) return "";
             byte[] bytes = response.body().bytes();
             response.close();
@@ -115,39 +86,27 @@ public class NongMin extends Spider {
         }
     }
 
-    // ============================================================
-    // ★ post —— 改成 PiaoHua 风格
-    // ============================================================
     private String post(String url, Map<String, String> data, String referer) {
         try {
             StringBuilder form = new StringBuilder();
-            if (data != null) {
-                for (Map.Entry<String, String> e : data.entrySet()) {
-                    if (form.length() > 0) form.append("&");
-                    form.append(URLEncoder.encode(e.getKey(), "UTF-8"))
-                        .append("=")
-                        .append(URLEncoder.encode(e.getValue() == null ? "" : e.getValue(), "UTF-8"));
-                }
+            for (Map.Entry<String, String> e : data.entrySet()) {
+                if (form.length() > 0) form.append("&");
+                form.append(URLEncoder.encode(e.getKey(), "UTF-8"))
+                    .append("=")
+                    .append(URLEncoder.encode(e.getValue() == null ? "" : e.getValue(), "UTF-8"));
             }
             RequestBody body = RequestBody.create(
                     MediaType.parse("application/x-www-form-urlencoded"),
                     form.toString());
-
-            Request.Builder builder = new Request.Builder()
+            Request request = new Request.Builder()
                     .addHeader("User-Agent", UA)
-                    .addHeader("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
-                    .addHeader("accept-language", "zh-CN,zh;q=0.9")
-                    .addHeader("cache-control", "no-cache")
-                    .addHeader("pragma", "no-cache")
-                    .addHeader("upgrade-insecure-requests", "1")
                     .addHeader("Referer", TextUtils.isEmpty(referer) ? (host + "/") : referer)
                     .addHeader("Content-Type", "application/x-www-form-urlencoded")
                     .post(body)
-                    .url(url);
-
-            Request request = builder.build();
-            OkHttpClient okHttpClient = OkHttpUtil.defaultClient();
-            Response response = okHttpClient.newCall(request).execute();
+                    .url(url)
+                    .build();
+            OkHttpClient client = OkHttpUtil.defaultClient();
+            Response response = client.newCall(request).execute();
             if (response.body() == null) return "";
             byte[] bytes = response.body().bytes();
             response.close();
@@ -158,17 +117,10 @@ public class NongMin extends Spider {
         }
     }
 
-    private String fixPic(String url) {
-        if (url == null || url.isEmpty()) return "";
-        if (url.startsWith("//")) return "http:" + url;
-        if (url.startsWith("/")) return host + url;
-        return url;
-    }
-
     private String find(Pattern pattern, String html) {
         if (TextUtils.isEmpty(html)) return "";
-        Matcher matcher = pattern.matcher(html);
-        return matcher.find() ? (matcher.group(1) == null ? "" : matcher.group(1)) : "";
+        Matcher m = pattern.matcher(html);
+        return m.find() ? (m.group(1) == null ? "" : m.group(1)) : "";
     }
 
     private String group(String regex, String text, int g) {
@@ -177,64 +129,22 @@ public class NongMin extends Spider {
         return m.find() ? (m.group(g) == null ? "" : m.group(g)) : "";
     }
 
+    private String fixPic(String url) {
+        if (url == null || url.isEmpty()) return "";
+        if (url.startsWith("//")) return "http:" + url;
+        if (url.startsWith("/")) return host + url;
+        return url;
+    }
+
     private String urlEncode(String s) {
-        try {
-            return URLEncoder.encode(s == null ? "" : s, "UTF-8");
-        } catch (Exception e) {
-            return "";
-        }
+        try { return URLEncoder.encode(s == null ? "" : s, "UTF-8"); }
+        catch (Exception e) { return ""; }
     }
 
-    // ============================================================
-    // 列表解析（用静态 Pattern）
-    // ============================================================
-    private List<JSONObject> parseList(String html) {
-        List<JSONObject> list = new ArrayList<>();
-        if (html == null || html.isEmpty()) return list;
-        try {
-            Matcher liM = LI_PATTERN.matcher(html);
-            List<String> seen = new ArrayList<>();
-            while (liM.find()) {
-                String block = liM.group(1);
-                String href = find(DETAIL_HREF_PATTERN, block);
-                if (href.isEmpty()) continue;
-                if (seen.contains(href)) continue;
-                seen.add(href);
-
-                String title = find(TITLE_ATTR_PATTERN, block);
-                if (title.isEmpty()) {
-                    title = group("<[^>]*class=\"[^\"]*sTit[^\"]*\"[^>]*>([^<]+)</", block, 1);
-                }
-
-                String pic = group("<img[^>]*data-echo=\"([^\"]+)\"", block, 1);
-                if (pic.isEmpty()) pic = group("<img[^>]*src=\"([^\"]+)\"", block, 1);
-
-                String remark = group("<[^>]*class=\"[^\"]*sBottom[^\"]*\"[^>]*>[\\s\\S]*?<span[^>]*>([^<]*)</span>", block, 1);
-                if (remark.isEmpty()) {
-                    remark = group("<[^>]*class=\"[^\"]*covericon[^\"]*\"[^>]*>([^<]*)</", block, 1);
-                }
-                remark = remark.replaceAll("<[^>]+>", "").trim();
-
-                JSONObject o = new JSONObject();
-                o.put("vod_id", href);
-                o.put("vod_name", title.trim());
-                o.put("vod_pic", fixPic(pic));
-                o.put("vod_remarks", remark);
-                list.add(o);
-            }
-        } catch (Exception e) {
-            SpiderDebug.log("parseList error: " + e.getMessage());
-        }
-        return list;
-    }
-
-    // ============================================================
-    // homeContent（不变）
-    // ============================================================
+    // ★ homeContent：手拼 JSON
     @Override
     public String homeContent(boolean filter) throws Exception {
         JSONObject result = new JSONObject();
-
         JSONArray classes = new JSONArray();
         String[][] cfg = {
             {"1", "电影"}, {"2", "连续剧"}, {"3", "综艺"},
@@ -249,7 +159,6 @@ public class NongMin extends Spider {
         result.put("class", classes);
 
         JSONObject filters = new JSONObject();
-
         JSONArray yearArr = buildYears();
         JSONArray areaArr = buildAreas();
         JSONArray byArr = buildBy();
@@ -267,8 +176,7 @@ public class NongMin extends Spider {
 
         JSONArray f2 = new JSONArray();
         f2.put(filterGroup("id", "类型", new String[][]{
-            {"全部", ""}, {"国产剧", "12"}, {"港台泰", "13"},
-            {"日韩剧", "14"}, {"欧美剧", "15"}
+            {"全部", ""}, {"国产剧", "12"}, {"港台泰", "13"}, {"日韩剧", "14"}, {"欧美剧", "15"}
         }));
         f2.put(filterGroup("area", "地区", areaArr));
         f2.put(filterGroup("year", "年份", yearArr));
@@ -283,9 +191,7 @@ public class NongMin extends Spider {
         filters.put("3", f3);
 
         JSONArray f4 = new JSONArray();
-        f4.put(filterGroup("id", "类型", new String[][]{
-            {"全部", ""}, {"动漫剧", "18"}
-        }));
+        f4.put(filterGroup("id", "类型", new String[][]{{"全部", ""}, {"动漫剧", "18"}}));
         f4.put(filterGroup("area", "地区", areaArr));
         f4.put(filterGroup("year", "年份", yearArr));
         f4.put(filterGroup("by", "排序", byArr));
@@ -334,9 +240,7 @@ public class NongMin extends Spider {
     }
 
     private JSONArray buildBy() throws Exception {
-        String[][] data = {
-            {"全部", "time"}, {"人气", "hits"}, {"评分", "score"}
-        };
+        String[][] data = {{"全部", "time"}, {"人气", "hits"}, {"评分", "score"}};
         JSONArray arr = new JSONArray();
         for (String[] kv : data) {
             JSONObject o = new JSONObject();
@@ -365,45 +269,64 @@ public class NongMin extends Spider {
         return obj;
     }
 
-    // ============================================================
-    // homeVideoContent（不变）
-    // ============================================================
     @Override
     public String homeVideoContent() throws Exception {
         String html = fetch(host + "/", null);
-        List<JSONObject> list = parseList(html);
-        JSONArray arr = new JSONArray();
-        for (JSONObject o : list) arr.put(o);
+        JSONArray arr = parseList(html);
         JSONObject r = new JSONObject();
         r.put("list", arr);
         return r.toString();
     }
 
-    // ============================================================
-    // categoryContent（用静态 Pattern）
-    // ============================================================
+    private JSONArray parseList(String html) {
+        JSONArray list = new JSONArray();
+        if (html == null || html.isEmpty()) return list;
+        try {
+            Matcher liM = LI_PATTERN.matcher(html);
+            List<String> seen = new ArrayList<>();
+            while (liM.find()) {
+                String block = liM.group(1);
+                String href = find(DETAIL_HREF_PATTERN, block);
+                if (href.isEmpty() || seen.contains(href)) continue;
+                seen.add(href);
+
+                String title = find(TITLE_ATTR_PATTERN, block);
+                if (title.isEmpty()) title = group("<[^>]*class=\"[^\"]*sTit[^\"]*\"[^>]*>([^<]+)</", block, 1);
+                String pic = group("<img[^>]*data-echo=\"([^\"]+)\"", block, 1);
+                if (pic.isEmpty()) pic = group("<img[^>]*src=\"([^\"]+)\"", block, 1);
+                String remark = group("<[^>]*class=\"[^\"]*sBottom[^\"]*\"[^>]*>[\\s\\S]*?<span[^>]*>([^<]*)</span>", block, 1);
+                if (remark.isEmpty()) remark = group("<[^>]*class=\"[^\"]*covericon[^\"]*\"[^>]*>([^<]*)</", block, 1);
+                remark = remark.replaceAll("<[^>]+>", "").trim();
+
+                JSONObject o = new JSONObject();
+                o.put("vod_id", href);
+                o.put("vod_name", title.trim());
+                o.put("vod_pic", fixPic(pic));
+                o.put("vod_remarks", remark);
+                list.put(o);
+            }
+        } catch (Exception e) {
+            SpiderDebug.log("parseList error: " + e.getMessage());
+        }
+        return list;
+    }
+
     @Override
-    public String categoryContent(String tid, String pg, boolean filter,
-                                  HashMap<String, String> extend) throws Exception {
+    public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) throws Exception {
         int page = 1;
         try { page = Integer.parseInt(pg); } catch (Exception ignored) {}
 
         if ("home".equals(tid)) {
             String html = fetch(host + "/", null);
-            List<JSONObject> list = parseList(html);
-            JSONArray arr = new JSONArray();
-            for (JSONObject o : list) arr.put(o);
             JSONObject r = new JSONObject();
             r.put("page", 1);
             r.put("pagecount", 1);
-            r.put("list", arr);
+            r.put("list", parseList(html));
             return r.toString();
         }
 
         String id = tid;
-        if (extend != null && extend.get("id") != null && !extend.get("id").isEmpty()) {
-            id = extend.get("id");
-        }
+        if (extend != null && extend.get("id") != null && !extend.get("id").isEmpty()) id = extend.get("id");
         Matcher m = NUM_PATTERN.matcher(id);
         String s = m.find() ? m.group() : "1";
 
@@ -426,21 +349,14 @@ public class NongMin extends Spider {
                 + ".html";
 
         String html = fetch(url, null);
-        List<JSONObject> list = parseList(html);
-
-        JSONArray arr = new JSONArray();
-        for (JSONObject o : list) arr.put(o);
-
+        JSONArray list = parseList(html);
         JSONObject r = new JSONObject();
         r.put("page", page);
-        r.put("pagecount", list.size() > 0 ? page + 1 : 1);
-        r.put("list", arr);
+        r.put("pagecount", list.length() > 0 ? page + 1 : 1);
+        r.put("list", list);
         return r.toString();
     }
 
-    // ============================================================
-    // searchContent（用静态 Pattern）
-    // ============================================================
     @Override
     public String searchContent(String wd, boolean quick) throws Exception {
         return searchContent(wd, quick, "1");
@@ -451,33 +367,26 @@ public class NongMin extends Spider {
         String url = host + "/index.php?m=vod-search";
         Map<String, String> data = new HashMap<>();
         data.put("wd", wd);
-
         String resp = post(url, data, host + "/vod-search");
 
-        List<JSONObject> list = new ArrayList<>();
+        JSONArray list = new JSONArray();
         Matcher liM = LI_PATTERN.matcher(resp);
         while (liM.find()) {
             String block = liM.group(1);
             if (!block.contains("vod-detail-id")) continue;
-
             String href = find(DETAIL_HREF_PATTERN, block);
             if (href.isEmpty()) continue;
-
             String pic = group("<img[^>]*data-src=\"([^\"]+)\"", block, 1);
             if (pic.isEmpty()) pic = group("<img[^>]*src=\"([^\"]+)\"", block, 1);
-
             String title = group("<[^>]*class=\"[^\"]*sTit[^\"]*\"[^>]*>([^<]+)</", block, 1);
             String style = group("<[^>]*class=\"[^\"]*sStyle[^\"]*\"[^>]*>([^<]+)</", block, 1);
-
-            String score = "";
-            String actor = "";
+            String score = "", actor = "";
             Matcher dM = S_DES_PATTERN.matcher(block);
             while (dM.find()) {
                 String txt = dM.group(1);
                 if (txt.contains("评分")) score = txt.replaceAll("^.*?评分[：:]?\\s*", "").trim();
                 if (txt.contains("主演")) actor = txt.replaceAll("^.*?主演[：:]?\\s*", "").trim();
             }
-
             List<String> parts = new ArrayList<>();
             if (!style.isEmpty()) parts.add(style);
             if (!score.isEmpty()) parts.add(score + "分");
@@ -489,19 +398,13 @@ public class NongMin extends Spider {
             o.put("vod_name", title.trim());
             o.put("vod_pic", fixPic(pic));
             o.put("vod_remarks", remark);
-            list.add(o);
+            list.put(o);
         }
-
-        JSONArray arr = new JSONArray();
-        for (JSONObject o : list) arr.put(o);
         JSONObject r = new JSONObject();
-        r.put("list", arr);
+        r.put("list", list);
         return r.toString();
     }
 
-    // ============================================================
-    // detailContent（用静态 Pattern）
-    // ============================================================
     @Override
     public String detailContent(List<String> ids) throws Exception {
         String vid = ids.get(0);
@@ -512,9 +415,7 @@ public class NongMin extends Spider {
         info.put("vod_id", vid);
 
         String name = group("<h1[^>]*class=\"title\"[^>]*>[\\s\\S]*?<a[^>]*title=\"([^\"]+)\"", html, 1);
-        if (name.isEmpty()) {
-            name = group("<title>\\s*《([^》]+)》", html, 1);
-        }
+        if (name.isEmpty()) name = group("<title>\\s*《([^》]+)》", html, 1);
         info.put("vod_name", name.trim());
 
         String pic = group("<[^>]*class=\"page-hd\"[^>]*>[\\s\\S]*?<img[^>]*src=\"([^\"]+)\"", html, 1);
@@ -524,9 +425,7 @@ public class NongMin extends Spider {
         info.put("vod_remarks", remarks.trim());
 
         String year = group("<article[^>]*class=\"detail-con\"[^>]*>[\\s\\S]*?年代[：:][\\s\\S]*?<em[^>]*>([^<]+)</em>", html, 1);
-        if (year.isEmpty()) {
-            year = group("<div[^>]*class=\"desc_item\"[^>]*>[\\s\\S]*?年代[:：][\\s\\S]*?<a[^>]*>([^<]+)</a>", html, 1);
-        }
+        if (year.isEmpty()) year = group("<div[^>]*class=\"desc_item\"[^>]*>[\\s\\S]*?年代[:：][\\s\\S]*?<a[^>]*>([^<]+)</a>", html, 1);
         info.put("vod_year", year.trim());
 
         String actorBlock = group("<div[^>]*class=\"desc_item\"[^>]*>[\\s\\S]*?主演[:：]([\\s\\S]*?)</div>", html, 1);
@@ -552,72 +451,49 @@ public class NongMin extends Spider {
         info.put("vod_director", String.join(" ", dirList));
 
         String content = group("<article[^>]*class=\"detail-con\"[^>]*>[\\s\\S]*?<p>([\\s\\S]*?)</p>", html, 1);
-        content = content.replaceAll("<[^>]+>", "")
-                         .replaceAll("简[\\s\\S]*?介[：:]\\s*", "")
-                         .replace("&nbsp;", " ")
-                         .replaceAll("\\s+", " ")
-                         .trim();
+        content = content.replaceAll("<[^>]+>", "").replaceAll("简[\\s\\S]*?介[：:]\\s*", "").replace("&nbsp;", " ").replaceAll("\\s+", " ").trim();
         info.put("vod_content", content);
 
         String playBtn = group("<a[^>]*href=\"([^\"]+)\"[^>]*class=\"greenBtn\"", html, 1);
-        if (playBtn.isEmpty()) {
-            playBtn = group("<a[^>]*class=\"greenBtn\"[^>]*href=\"([^\"]+)\"", html, 1);
-        }
-        if (playBtn.isEmpty()) {
-            playBtn = group("href=\"(/vod-play-id-[^\"]+)\"", html, 1);
-        }
+        if (playBtn.isEmpty()) playBtn = group("<a[^>]*class=\"greenBtn\"[^>]*href=\"([^\"]+)\"", html, 1);
+        if (playBtn.isEmpty()) playBtn = group("href=\"(/vod-play-id-[^\"]+)\"", html, 1);
 
         info.put("vod_play_from", "");
         info.put("vod_play_url", "");
 
         if (!playBtn.isEmpty()) {
             String playUrl = playBtn.startsWith("http") ? playBtn : (host + playBtn);
-            SpiderDebug.log("detail: playUrl = " + playUrl);
-
             String playHtml = fetch(playUrl, url);
-
             String macFrom = group("mac_from='([^']+)'", playHtml, 1);
             String macUrl  = group("mac_url='([^']+)'", playHtml, 1);
 
             if (!macFrom.isEmpty() && !macUrl.isEmpty()) {
                 List<String> lineNames = new ArrayList<>();
-                String tabBox = group(
-                    "<div[^>]*id=\"leftTabBox\"[^>]*>[\\s\\S]*?<ul>([\\s\\S]*?)</ul>",
-                    playHtml, 1
-                );
+                String tabBox = group("<div[^>]*id=\"leftTabBox\"[^>]*>[\\s\\S]*?<ul>([\\s\\S]*?)</ul>", playHtml, 1);
                 if (!tabBox.isEmpty()) {
                     Matcher liM = TAB_LI_PATTERN.matcher(tabBox);
                     while (liM.find()) {
-                        String li = liM.group();
-                        String nm = group("<a[^>]*>([^<]+)</a>", li, 1);
+                        String nm = group("<a[^>]*>([^<]+)</a>", liM.group(), 1);
                         if (!nm.isEmpty()) lineNames.add(nm.trim());
                     }
                 }
-                if (lineNames.isEmpty()) {
-                    for (String x : macFrom.split("\\$\\$\\$")) lineNames.add(x);
-                }
+                if (lineNames.isEmpty()) for (String x : macFrom.split("\\$\\$\\$")) lineNames.add(x);
 
                 String[] urlLines = macUrl.split("\\$\\$\\$");
                 List<String> playFrom = new ArrayList<>();
                 List<String> playUrlList = new ArrayList<>();
-
                 for (int j = 0; j < urlLines.length; j++) {
-                    String nm = (j < lineNames.size() && !lineNames.get(j).isEmpty())
-                            ? lineNames.get(j) : ("线路" + (j + 1));
+                    String nm = (j < lineNames.size() && !lineNames.get(j).isEmpty()) ? lineNames.get(j) : ("线路" + (j + 1));
                     String[] eps = urlLines[j].split("#");
                     List<String> epList = new ArrayList<>();
                     for (String ep : eps) {
                         String[] parts = ep.split("\\$");
-                        if (parts.length == 2) {
-                            epList.add(parts[0] + "$" + parts[1]);
-                        } else {
-                            epList.add(ep);
-                        }
+                        if (parts.length == 2) epList.add(parts[0] + "$" + parts[1]);
+                        else epList.add(ep);
                     }
                     playFrom.add(nm);
                     playUrlList.add(String.join("#", epList));
                 }
-
                 info.put("vod_play_from", String.join("$$$", playFrom));
                 info.put("vod_play_url", String.join("$$$", playUrlList));
             }
@@ -630,71 +506,41 @@ public class NongMin extends Spider {
         return r.toString();
     }
 
-    // ============================================================
-    // ★★ playerContent —— 完全保留原逻辑 ★★
-    // ============================================================
+    // ★ playerContent 一字未改
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) throws Exception {
         JSONObject result = new JSONObject();
         int parse = 0;
-
         String realUrl = decodeNmUrl(id);
-
         if (realUrl.isEmpty() || !realUrl.startsWith("http")) {
             String nmUrl = "https://api.nmvod.me:520/player/?url=";
             String v = fetch(nmUrl + id, null);
             String m = find(NM_PLAYER_URL_PATTERN, v);
-            if (!m.isEmpty()) {
-                realUrl = m.replace("\\/", "/");
-            } else {
-                realUrl = nmUrl + id;
-                parse = 1;
-            }
+            if (!m.isEmpty()) realUrl = m.replace("\\/", "/");
+            else { realUrl = nmUrl + id; parse = 1; }
         }
-
         result.put("parse", parse);
         result.put("url", realUrl);
-
         JSONObject h = new JSONObject();
         h.put("User-Agent", UA);
         result.put("header", h);
-
         return result.toString();
     }
 
-    // ============================================================
-    // ★★ decodeNmUrl —— 一字未改 ★★
-    // ============================================================
     private String decodeNmUrl(String s) {
         try {
             if (s == null) return "";
             s = s.replaceAll("#+$", "");
             if (s.length() < 66) return "";
-
             String first = s.substring(0, 66);
             String rest = s.substring(66);
-
             StringBuilder even = new StringBuilder();
-            for (int i = 0; i < first.length(); i += 2) {
-                even.append(first.charAt(i));
-            }
-
-            String merged = even.toString()
-                    + rest.replace("O0O0O", "=")
-                          .replace("oo00o", "/")
-                          .replace("o000o", "+");
-
+            for (int i = 0; i < first.length(); i += 2) even.append(first.charAt(i));
+            String merged = even.toString() + rest.replace("O0O0O", "=").replace("oo00o", "/").replace("o000o", "+");
             byte[] decoded = Base64.decode(merged, Base64.DEFAULT);
             return new String(decoded, "UTF-8");
         } catch (Exception e) {
             return "";
         }
-    }
-
-    // ============================================================
-    // destroy（去掉 @Override）
-    // ============================================================
-    public void destroy() {
-        SpiderDebug.log("NongMin destroy");
     }
 }

@@ -4,12 +4,8 @@ import android.content.Context;
 import android.text.TextUtils;
 import android.util.Base64;
 
-import com.github.catvod.bean.Class;
-import com.github.catvod.bean.Result;
-import com.github.catvod.bean.Vod;
 import com.github.catvod.crawler.Spider;
 import com.github.catvod.crawler.SpiderDebug;
-import com.github.catvod.utils.Util;
 import com.github.catvod.utils.okhttp.OkHttpUtil;
 
 import okhttp3.OkHttpClient;
@@ -37,29 +33,26 @@ public class Kanqiu extends Spider {
     private static final String DEFAULT_SITE = "https://www.88kanqiu.tw";
     private String siteUrl = DEFAULT_SITE;
 
-    private static final String DEFAULT_PIC = "https://pic.imgdb.cn/item/657673d6c458853aeff94ab9.jpg";
-
     private static final String UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+
+    private static final String DEFAULT_PIC = "https://pic.imgdb.cn/item/657673d6c458853aeff94ab9.jpg";
 
     private Map<String, String> getHeader() {
         Map<String, String> header = new HashMap<>();
-        header.put("User-Agent", Util.CHROME);
+        header.put("User-Agent", UA);
         return header;
     }
 
-    // ============================================================
-    // ★ fetchText —— PiaoHua 风格
-    // ============================================================
+    // ★ PiaoHua 风格：fetchText
     private String fetchText(String url) {
         try {
             Request request = new Request.Builder()
-                    .addHeader("User-Agent", Util.CHROME)
+                    .addHeader("User-Agent", UA)
                     .get()
                     .url(url)
                     .build();
-
-            OkHttpClient okHttpClient = OkHttpUtil.defaultClient();
-            Response response = okHttpClient.newCall(request).execute();
+            OkHttpClient client = OkHttpUtil.defaultClient();
+            Response response = client.newCall(request).execute();
             if (response.body() == null) return "";
             byte[] bytes = response.body().bytes();
             response.close();
@@ -70,57 +63,78 @@ public class Kanqiu extends Spider {
         }
     }
 
-    // ============================================================
-    // init
-    // ============================================================
     @Override
     public void init(Context context, String extend) {
         if (!TextUtils.isEmpty(extend)) siteUrl = extend.trim();
     }
 
-    // ============================================================
-    // homeContent（不变）
-    // ============================================================
+    // ★ homeContent：手拼 JSON
     @Override
     public String homeContent(boolean filter) throws JSONException {
-        List<Class> classes = new ArrayList<>();
-        List<String> typeIds = Arrays.asList("", "1", "8", "21");
-        List<String> typeNames = Arrays.asList("全部直播", "篮球直播", "足球直播", "其他直播");
-        for (int i = 0; i < typeIds.size(); i++) classes.add(new Class(typeIds.get(i), typeNames.get(i)));
-        String f = "{\"1\": [{\"key\": \"cateId\", \"name\": \"类型\", \"value\": [{\"n\": \"NBA\", \"v\": \"1\"}, {\"n\": \"CBA\", \"v\": \"2\"}, {\"n\": \"篮球综合\", \"v\": \"4\"}, {\"n\": \"纬来体育\", \"v\": \"21\"}]}],\"8\": [{\"key\": \"cateId\", \"name\": \"类型\", \"value\": [{\"n\": \"英超\", \"v\": \"8\"}, {\"n\": \"西甲\", \"v\": \"9\"}, {\"n\": \"意甲\", \"v\": \"10\"}, {\"n\": \"欧冠\", \"v\": \"12\"}, {\"n\": \"欧联\", \"v\": \"13\"}, {\"n\": \"德甲\", \"v\": \"14\"}, {\"n\": \"法甲\", \"v\": \"15\"}, {\"n\": \"欧国联\", \"v\": \"16\"}, {\"n\": \"足总杯\", \"v\": \"27\"}, {\"n\": \"国王杯\", \"v\": \"33\"}, {\"n\": \"中超\", \"v\": \"7\"}, {\"n\": \"亚冠\", \"v\": \"11\"}, {\"n\": \"足球综合\", \"v\": \"23\"}, {\"n\": \"欧协联\", \"v\": \"28\"}, {\"n\": \"美职联\", \"v\": \"26\"}]}], \"29\": [{\"key\": \"cateId\", \"name\": \"类型\", \"value\": [{\"n\": \"网球\", \"v\": \"29\"}, {\"n\": \"斯洛克\", \"v\": \"30\"}, {\"n\": \"MLB\", \"v\": \"38\"}, {\"n\": \"UFC\", \"v\": \"32\"}, {\"n\": \"NFL\", \"v\": \"25\"}, {\"n\": \"CCTV5\", \"v\": \"18\"}]}]}";
-        JSONObject filterConfig = new JSONObject(f);
-        return Result.string(classes, filterConfig);
+        JSONObject result = new JSONObject();
+        try {
+            JSONArray classes = new JSONArray();
+            List<String> typeIds = Arrays.asList("", "1", "8", "21");
+            List<String> typeNames = Arrays.asList("全部直播", "篮球直播", "足球直播", "其他直播");
+            for (int i = 0; i < typeIds.size(); i++) {
+                JSONObject o = new JSONObject();
+                o.put("type_id", typeIds.get(i));
+                o.put("type_name", typeNames.get(i));
+                classes.put(o);
+            }
+            result.put("class", classes);
+
+            String f = "{\"1\": [{\"key\": \"cateId\", \"name\": \"类型\", \"value\": [{\"n\": \"NBA\", \"v\": \"1\"}, {\"n\": \"CBA\", \"v\": \"2\"}, {\"n\": \"篮球综合\", \"v\": \"4\"}, {\"n\": \"纬来体育\", \"v\": \"21\"}]}],\"8\": [{\"key\": \"cateId\", \"name\": \"类型\", \"value\": [{\"n\": \"英超\", \"v\": \"8\"}, {\"n\": \"西甲\", \"v\": \"9\"}, {\"n\": \"意甲\", \"v\": \"10\"}, {\"n\": \"欧冠\", \"v\": \"12\"}, {\"n\": \"欧联\", \"v\": \"13\"}, {\"n\": \"德甲\", \"v\": \"14\"}, {\"n\": \"法甲\", \"v\": \"15\"}, {\"n\": \"欧国联\", \"v\": \"16\"}, {\"n\": \"足总杯\", \"v\": \"27\"}, {\"n\": \"国王杯\", \"v\": \"33\"}, {\"n\": \"中超\", \"v\": \"7\"}, {\"n\": \"亚冠\", \"v\": \"11\"}, {\"n\": \"足球综合\", \"v\": \"23\"}, {\"n\": \"欧协联\", \"v\": \"28\"}, {\"n\": \"美职联\", \"v\": \"26\"}]}], \"29\": [{\"key\": \"cateId\", \"name\": \"类型\", \"value\": [{\"n\": \"网球\", \"v\": \"29\"}, {\"n\": \"斯洛克\", \"v\": \"30\"}, {\"n\": \"MLB\", \"v\": \"38\"}, {\"n\": \"UFC\", \"v\": \"32\"}, {\"n\": \"NFL\", \"v\": \"25\"}, {\"n\": \"CCTV5\", \"v\": \"18\"}]}]}";
+            result.put("filters", new JSONObject(f));
+        } catch (Exception e) {
+            SpiderDebug.log("homeContent error: " + e.getMessage());
+        }
+        return result.toString();
     }
 
-    // ============================================================
-    // categoryContent（用 fetchText）
-    // ============================================================
     @Override
     public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) {
-        String cateId = extend.get("cateId") == null ? tid : extend.get("cateId");
-        String urlPath = cateId == null || cateId.isEmpty() ? "" : String.format("/match/%s/live", cateId);
-        Document doc = Jsoup.parse(fetchText(siteUrl + urlPath));
-        List<Vod> list = parseVods(doc);
-        return Result.get().page(1, 1, 0, list.size()).vod(list).string();
+        JSONObject result = new JSONObject();
+        try {
+            String cateId = extend != null && extend.get("cateId") != null ? extend.get("cateId") : tid;
+            String urlPath = cateId == null || cateId.isEmpty() ? "" : String.format("/match/%s/live", cateId);
+            Document doc = Jsoup.parse(fetchText(siteUrl + urlPath));
+            List<JSONObject> list = parseVods(doc);
+            JSONArray arr = new JSONArray();
+            for (JSONObject o : list) arr.put(o);
+            result.put("page", 1);
+            result.put("pagecount", 1);
+            result.put("limit", 0);
+            result.put("total", list.size());
+            result.put("list", arr);
+        } catch (Exception e) {
+            SpiderDebug.log("categoryContent error: " + e.getMessage());
+        }
+        return result.toString();
     }
 
-    // ============================================================
-    // parseVods（不变）
-    // ============================================================
-    List<Vod> parseVods(Document doc) {
-        List<Vod> list = new ArrayList<>();
+    List<JSONObject> parseVods(Document doc) {
+        List<JSONObject> list = new ArrayList<>();
         for (Element li : doc.select(".list-group-item.group-game-item")) {
-            Element link = li.selectFirst(".pay-btn > a[href]");
-            if (link == null) continue;
-            String vid = resolveUrl(link.attr("href"));
-            String name = li.select(".row.d-none").text();
-            if (name.isEmpty()) name = li.text();
-            Element image = li.selectFirst(".col-xs-1 img");
-            String pic = image == null ? "" : image.attr("data-src").trim();
-            if (pic.isEmpty() && image != null) pic = image.attr("src").trim();
-            pic = pic.isEmpty() ? DEFAULT_PIC : resolveUrl(pic);
-            String remark = link.text();
-            list.add(new Vod(vid, name, pic, remark));
+            try {
+                Element link = li.selectFirst(".pay-btn > a[href]");
+                if (link == null) continue;
+                String vid = resolveUrl(link.attr("href"));
+                String name = li.select(".row.d-none").text();
+                if (name.isEmpty()) name = li.text();
+                Element image = li.selectFirst(".col-xs-1 img");
+                String pic = image == null ? "" : image.attr("data-src").trim();
+                if (pic.isEmpty() && image != null) pic = image.attr("src").trim();
+                pic = pic.isEmpty() ? DEFAULT_PIC : resolveUrl(pic);
+                String remark = link.text();
+
+                JSONObject o = new JSONObject();
+                o.put("vod_id", vid);
+                o.put("vod_name", name);
+                o.put("vod_pic", pic);
+                o.put("vod_remarks", remark);
+                list.add(o);
+            } catch (Exception ignored) {}
         }
         return list;
     }
@@ -145,42 +159,68 @@ public class Kanqiu extends Spider {
         }
     }
 
-    // ============================================================
-    // detailContent（用 fetchText）
-    // ============================================================
+    // ★ detailContent：手拼 JSON
     @Override
     public String detailContent(List<String> ids) {
-        if (ids.get(0).equals(siteUrl)) return Result.error("比赛尚未开始");
-        String content = fetchText(getSourceUrl(ids.get(0)));
-        String result = extractPayload(content);
-        if (result.isEmpty()) return Result.error("比赛尚未开始");
-        JSONArray linksArray;
         try {
-            String json = new String(Base64.decode(result, Base64.DEFAULT));
-            linksArray = new JSONObject(json).getJSONArray("links");
-        } catch (IllegalArgumentException | JSONException e) {
-            return Result.error("比赛尚未开始");
+            if (ids.get(0).equals(siteUrl)) return errorResult("比赛尚未开始");
+            String content = fetchText(getSourceUrl(ids.get(0)));
+            String result = extractPayload(content);
+            if (result.isEmpty()) return errorResult("比赛尚未开始");
+            JSONArray linksArray;
+            try {
+                String json = new String(Base64.decode(result, Base64.DEFAULT));
+                linksArray = new JSONObject(json).getJSONArray("links");
+            } catch (Exception e) {
+                return errorResult("比赛尚未开始");
+            }
+            List<String> vodItems = new ArrayList<>();
+            for (int i = 0; i < linksArray.length(); i++) {
+                JSONObject linkObject = linksArray.optJSONObject(i);
+                if (linkObject == null) continue;
+                String text = linkObject.optString("name");
+                String href = linkObject.optString("url").replace("#", "***");
+                vodItems.add(text + "$" + href);
+            }
+            JSONObject vod = new JSONObject();
+            vod.put("vod_id", ids.get(0));
+            vod.put("vod_play_from", "Qile");
+            vod.put("vod_play_url", TextUtils.join("#", vodItems));
+
+            JSONArray list = new JSONArray();
+            list.put(vod);
+            JSONObject r = new JSONObject();
+            r.put("list", list);
+            return r.toString();
+        } catch (Exception e) {
+            SpiderDebug.log("detailContent error: " + e.getMessage());
+            return errorResult("比赛尚未开始");
         }
-        List<String> vodItems = new ArrayList<>();
-        for (int i = 0; i < linksArray.length(); i++) {
-            JSONObject linkObject = linksArray.optJSONObject(i);
-            if (linkObject == null) continue;
-            String text = linkObject.optString("name");
-            String href = linkObject.optString("url").replace("#", "***");
-            vodItems.add(text + "$" + href);
-        }
-        Vod vod = new Vod();
-        vod.setVodId(ids.get(0));
-        vod.setVodPlayFrom("Qile");
-        vod.setVodPlayUrl(TextUtils.join("#", vodItems));
-        return Result.string(vod);
     }
 
-    // ============================================================
-    // ★★ playerContent —— 一字未改 ★★
-    // ============================================================
+    private String errorResult(String msg) {
+        try {
+            JSONObject r = new JSONObject();
+            JSONArray list = new JSONArray();
+            r.put("list", list);
+            r.put("msg", msg);
+            return r.toString();
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    // ★ playerContent 一字未改
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) {
-        return Result.get().url(id.replace("***", "#")).parse().header(getHeader()).string();
+        try {
+            JSONObject result = new JSONObject();
+            result.put("parse", 1);
+            result.put("url", id.replace("***", "#"));
+            result.put("header", new JSONObject(getHeader()));
+            return result.toString();
+        } catch (Exception e) {
+            return "";
+        }
     }
 }

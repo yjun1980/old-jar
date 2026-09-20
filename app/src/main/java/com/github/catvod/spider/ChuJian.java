@@ -25,73 +25,50 @@ import java.util.regex.Pattern;
 public class ChuJian extends Spider {
 
     private static final String API_HOST = "https://cjysw.cc";
+    private static final String UA = "Mozilla/5.0 (Linux; Android 13; SM-G9910) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36";
 
-    private static final String UA_MB =
-        "Mozilla/5.0 (Linux; Android 13; SM-G9910) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36";
-
-    // ============================================================
-    // ★ 静态 Pattern 常量（PiaoHua 风格）
-    // ============================================================
     private static final Pattern CARD_PATTERN = Pattern.compile(
         "<a[^>]*href=\"([^\"]+)\"[^>]*class=\"[^\"]*module-poster-item[^\"]*\"[^>]*>([\\s\\S]*?)</a>");
-
     private static final Pattern PAGE_LINK_PATTERN = Pattern.compile(
         "<a[^>]*class=\"[^\"]*page-link[^\"]*\"[^>]*>(\\d+)</a>");
-
     private static final Pattern INFO_ITEM_PATTERN = Pattern.compile(
         "<div[^>]*class=\"[^\"]*module-info-item[^\"]*\"[^>]*>[\\s\\S]*?" +
         "<span[^>]*class=\"[^\"]*module-info-item-title[^\"]*\"[^>]*>([^<]*)</span>[\\s\\S]*?" +
         "<div[^>]*class=\"[^\"]*module-info-item-content[^\"]*\"[^>]*>([\\s\\S]*?)</div>");
-
     private static final Pattern TAB_NAME_PATTERN = Pattern.compile(
         "<div[^>]*class=\"[^\"]*module-tab-item[^\"]*\"[^>]*>[\\s\\S]*?<span>([^<]+)</span>");
-
     private static final Pattern PLAY_BLOCK_PATTERN = Pattern.compile(
         "<div[^>]*class=\"[^\"]*module-play-list[^\"]*\"[^>]*>([\\s\\S]*?)</div>\\s*</div>\\s*</div>");
-
     private static final Pattern PLAY_EP_PATTERN = Pattern.compile(
         "<a[^>]*class=\"[^\"]*module-play-list-link[^\"]*\"[^>]*href=\"([^\"]+)\"[^>]*>[\\s\\S]*?<span>([^<]+)</span>");
-
     private static final Pattern PLAYER_AAAA_PATTERN = Pattern.compile(
         "var\\s+player_aaaa\\s*=\\s*(\\{[\\s\\S]*?\\})\\s*</script>");
-
-    private static final Pattern JXAPI_SRC_PATTERN = Pattern.compile(
-        "src=\"([^\"]*playerconfig\\.js[^\"]*)\"");
-
-    private static final Pattern JXAPI_PARSE_PATTERN = Pattern.compile(
-        "\"parse\"\\s*:\\s*\"([^\"]*jxapi[^\"]*)\"");
-
-    // ============================================================
-    // 工具
-    // ============================================================
+    private static final Pattern JXAPI_SRC_PATTERN = Pattern.compile("src=\"([^\"]*playerconfig\\.js[^\"]*)\"");
+    private static final Pattern JXAPI_PARSE_PATTERN = Pattern.compile("\"parse\"\\s*:\\s*\"([^\"]*jxapi[^\"]*)\"");
 
     private Map<String, String> headers() {
         Map<String, String> h = new HashMap<>();
-        h.put("User-Agent", UA_MB);
+        h.put("User-Agent", UA);
         h.put("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
-        h.put("Accept-Language", "zh-CN,zh;q=0.9");
         h.put("Referer", API_HOST + "/");
         return h;
     }
 
     private Map<String, String> m3u8Headers() {
         Map<String, String> h = new HashMap<>();
-        h.put("User-Agent", UA_MB);
+        h.put("User-Agent", UA);
         h.put("Accept", "*/*");
         return h;
     }
 
     private Map<String, String> jsonHeaders() {
         Map<String, String> h = new HashMap<>();
-        h.put("User-Agent", UA_MB);
+        h.put("User-Agent", UA);
         h.put("Accept", "application/json,*/*");
         h.put("Referer", API_HOST + "/");
         return h;
     }
 
-    // ============================================================
-    // ★ fetchHtml —— 改成 PiaoHua 风格
-    // ============================================================
     private String fetchHtml(String url) {
         return fetchHtml(url, headers());
     }
@@ -99,28 +76,20 @@ public class ChuJian extends Spider {
     private String fetchHtml(String url, Map<String, String> hs) {
         try {
             Request.Builder builder = new Request.Builder()
-                    .addHeader("User-Agent", UA_MB)
-                    .addHeader("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-                    .addHeader("Accept-Language", "zh-CN,zh;q=0.9")
+                    .addHeader("User-Agent", UA)
                     .addHeader("Referer", API_HOST + "/")
                     .get()
                     .url(url);
-
-            if (hs != null) {
-                for (Map.Entry<String, String> e : hs.entrySet()) {
-                    builder.addHeader(e.getKey(), e.getValue());
-                }
-            }
-
+            if (hs != null) for (Map.Entry<String, String> e : hs.entrySet()) builder.addHeader(e.getKey(), e.getValue());
             Request request = builder.build();
-            OkHttpClient okHttpClient = OkHttpUtil.defaultClient();
-            Response response = okHttpClient.newCall(request).execute();
+            OkHttpClient client = OkHttpUtil.defaultClient();
+            Response response = client.newCall(request).execute();
             if (response.body() == null) return "";
             byte[] bytes = response.body().bytes();
             response.close();
             return new String(bytes, "utf-8");
         } catch (Exception e) {
-            SpiderDebug.log("fetchHtml error: " + url + " | " + e.getMessage());
+            SpiderDebug.log("fetchHtml error: " + e.getMessage());
             return "";
         }
     }
@@ -135,20 +104,15 @@ public class ChuJian extends Spider {
 
     private String cleanText(String t) {
         if (t == null) return "";
-        return t.replace("&nbsp;", " ")
-                .replaceAll("<[^>]+>", "")
-                .replaceAll("\\s+", " ")
-                .trim();
+        return t.replace("&nbsp;", " ").replaceAll("<[^>]+>", "").replaceAll("\\s+", " ").trim();
     }
 
-    private void sleep(long ms) {
-        try { Thread.sleep(ms); } catch (Exception ignored) {}
-    }
+    private void sleep(long ms) { try { Thread.sleep(ms); } catch (Exception ignored) {} }
 
     private String find(Pattern pattern, String html) {
         if (TextUtils.isEmpty(html)) return "";
-        Matcher matcher = pattern.matcher(html);
-        return matcher.find() ? (matcher.group(1) == null ? "" : matcher.group(1)) : "";
+        Matcher m = pattern.matcher(html);
+        return m.find() ? (m.group(1) == null ? "" : m.group(1)) : "";
     }
 
     private String group(String regex, String text, int g) {
@@ -157,142 +121,56 @@ public class ChuJian extends Spider {
         return m.find() ? (m.group(g) == null ? "" : m.group(g)) : "";
     }
 
-    // ============================================================
-    // ★ 从 playerconfig.js 里抠 jxapi 模板（用静态 Pattern）
-    // ============================================================
     private String getJxapiTemplate(String html) {
         Matcher cfgM = JXAPI_SRC_PATTERN.matcher(html);
-        if (!cfgM.find()) {
-            SpiderDebug.log("❌ 没找到 playerconfig.js 引用");
-            return "";
-        }
-
+        if (!cfgM.find()) return "";
         String cfgUrl = cfgM.group(1);
         if (cfgUrl.startsWith("//")) cfgUrl = "https:" + cfgUrl;
         else if (cfgUrl.startsWith("/")) cfgUrl = API_HOST + cfgUrl;
-
-        SpiderDebug.log("→ 抓 playerconfig.js: " + cfgUrl);
         String cfgJs = fetchHtml(cfgUrl, headers());
-        if (TextUtils.isEmpty(cfgJs)) {
-            SpiderDebug.log("❌ playerconfig.js 为空");
-            return "";
-        }
-
+        if (TextUtils.isEmpty(cfgJs)) return "";
         String tpl = find(JXAPI_PARSE_PATTERN, cfgJs).replace("\\/", "/");
-        if (TextUtils.isEmpty(tpl)) {
-            SpiderDebug.log("❌ playerconfig.js 里没找到 jxapi parse");
-            return "";
-        }
-        SpiderDebug.log("  原始模板: " + tpl);
-
-        if (Pattern.compile("[?&]player(&|$)").matcher(tpl).find()) {
-            tpl = tpl.replaceFirst("([?&])player(&|$)", "$1from=player$2");
-        } else {
-            String sep = tpl.contains("?") ? "&" : "?";
-            tpl = tpl + sep + "from=player";
-        }
-
-        SpiderDebug.log("  from=player 模板: " + tpl);
+        if (TextUtils.isEmpty(tpl)) return "";
+        if (Pattern.compile("[?&]player(&|$)").matcher(tpl).find()) tpl = tpl.replaceFirst("([?&])player(&|$)", "$1from=player$2");
+        else tpl = tpl + (tpl.contains("?") ? "&" : "?") + "from=player";
         return tpl;
     }
 
-    // ============================================================
-    // 列表卡片解析（用静态 Pattern）
-    // ============================================================
-    private List<JSONObject> parseCards(String html) {
-        List<JSONObject> list = new ArrayList<>();
+    private JSONArray parseCards(String html) {
+        JSONArray list = new JSONArray();
         if (TextUtils.isEmpty(html)) return list;
-
-        Matcher m = CARD_PATTERN.matcher(html);
-        while (m.find()) {
-            try {
+        try {
+            Matcher m = CARD_PATTERN.matcher(html);
+            while (m.find()) {
                 String href = m.group(1);
                 String body = m.group(2);
-
                 String title = group("<div[^>]*class=\"[^\"]*module-poster-item-title[^\"]*\"[^>]*>([^<]*)</div>", body, 1).trim();
                 String note  = group("<div[^>]*class=\"[^\"]*module-item-note[^\"]*\"[^>]*>([^<]*)</div>", body, 1).trim();
-
                 String pic = group("<img[^>]*data-original=\"([^\"]+)\"", body, 1);
                 if (TextUtils.isEmpty(pic)) pic = group("<img[^>]*src=\"([^\"]+)\"", body, 1);
-
                 if (!TextUtils.isEmpty(title)) {
                     JSONObject o = new JSONObject();
                     o.put("vod_id", fixUrl(href));
                     o.put("vod_name", title);
                     o.put("vod_pic", fixUrl(pic));
                     o.put("vod_remarks", note);
-                    list.add(o);
+                    list.put(o);
                 }
-            } catch (Exception ignored) {}
-        }
+            }
+        } catch (Exception ignored) {}
         return list;
     }
 
-    // ============================================================
-    // 筛选数据（不变）
-    // ============================================================
-    private JSONArray arrOf(String[][] data) {
-        JSONArray a = new JSONArray();
-        try {
-            for (String[] kv : data) {
-                JSONObject o = new JSONObject();
-                o.put("v", kv[0]);
-                o.put("n", kv[1]);
-                a.put(o);
-            }
-        } catch (Exception ignored) {}
-        return a;
+    @Override
+    public void init(Context context, String extend) {
+        SpiderDebug.log("ChuJian init");
     }
 
-    private String[][] MOVIE_CLASS = {
-        {"", "全部"},
-        {"动作","动作"},{"喜剧","喜剧"},{"爱情","爱情"},{"科幻","科幻"},
-        {"恐怖","恐怖"},{"剧情","剧情"},{"战争","战争"},{"犯罪","犯罪"},
-        {"动画","动画"},{"奇幻","奇幻"},{"冒险","冒险"},{"悬疑","悬疑"},
-        {"惊悚","惊悚"},{"古装","古装"},{"历史","历史"}
-    };
-
-    private String[][] TV_CLASS = {
-        {"", "全部"},
-        {"国产剧","国产剧"},{"港剧","港剧"},{"台剧","台剧"},
-        {"日剧","日剧"},{"韩剧","韩剧"},{"美剧","美剧"},
-        {"英剧","英剧"},{"泰剧","泰剧"}
-    };
-
-    private String[][] AREA_LIST = {
-        {"", "全部"},
-        {"大陆","大陆"},{"香港","香港"},{"台湾","台湾"},
-        {"美国","美国"},{"日本","日本"},{"韩国","韩国"},
-        {"英国","英国"},{"法国","法国"},{"德国","德国"},
-        {"泰国","泰国"},{"印度","印度"},{"其他","其他"}
-    };
-
-    private String[][] YEAR_LIST = {
-        {"", "全部"},
-        {"2026","2026"},{"2025","2025"},{"2024","2024"},{"2023","2023"},
-        {"2022","2022"},{"2021","2021"},{"2020","2020"}
-    };
-
-    private String[][] YEAR_SHORT = {
-        {"", "全部"},{"2026","2026"},{"2025","2025"},{"2024","2024"}
-    };
-
-    private String[][] YEAR_SHORT2 = {
-        {"", "全部"},{"2026","2026"},{"2025","2025"}
-    };
-
-    private String[][] AREA_ANIME = {
-        {"", "全部"},{"大陆","大陆"},{"日本","日本"},{"美国","美国"}
-    };
-
-    // ============================================================
-    // home（不变）
-    // ============================================================
+    // ★ homeContent：手拼 JSON
     @Override
     public String homeContent(boolean filter) {
         try {
             JSONObject result = new JSONObject();
-
             JSONArray classes = new JSONArray();
             String[][] cfg = {
                 {"1","电影"},{"15","剧集"},{"30","动漫"},{"24","综艺"},
@@ -300,24 +178,30 @@ public class ChuJian extends Spider {
             };
             for (String[] c : cfg) {
                 JSONObject o = new JSONObject();
-                o.put("type_id", c[0]);
-                o.put("type_name", c[1]);
+                o.put("type_id", c[0]); o.put("type_name", c[1]);
                 classes.put(o);
             }
             result.put("class", classes);
 
             JSONObject filters = new JSONObject();
+            String[][] MOVIE_CLASS = {{"", "全部"}, {"动作","动作"}, {"喜剧","喜剧"}, {"爱情","爱情"}, {"科幻","科幻"}, {"恐怖","恐怖"}, {"剧情","剧情"}, {"战争","战争"}, {"犯罪","犯罪"}, {"动画","动画"}, {"奇幻","奇幻"}, {"冒险","冒险"}, {"悬疑","悬疑"}, {"惊悚","惊悚"}, {"古装","古装"}, {"历史","历史"}};
+            String[][] TV_CLASS = {{"", "全部"}, {"国产剧","国产剧"}, {"港剧","港剧"}, {"台剧","台剧"}, {"日剧","日剧"}, {"韩剧","韩剧"}, {"美剧","美剧"}, {"英剧","英剧"}, {"泰剧","泰剧"}};
+            String[][] AREA_LIST = {{"", "全部"}, {"大陆","大陆"}, {"香港","香港"}, {"台湾","台湾"}, {"美国","美国"}, {"日本","日本"}, {"韩国","韩国"}, {"英国","英国"}, {"法国","法国"}, {"德国","德国"}, {"泰国","泰国"}, {"印度","印度"}, {"其他","其他"}};
+            String[][] YEAR_LIST = {{"", "全部"}, {"2026","2026"}, {"2025","2025"}, {"2024","2024"}, {"2023","2023"}, {"2022","2022"}, {"2021","2021"}, {"2020","2020"}};
+            String[][] YEAR_SHORT = {{"", "全部"}, {"2026","2026"}, {"2025","2025"}, {"2024","2024"}};
+            String[][] YEAR_SHORT2 = {{"", "全部"}, {"2026","2026"}, {"2025","2025"}};
+            String[][] AREA_ANIME = {{"", "全部"}, {"大陆","大陆"}, {"日本","日本"}, {"美国","美国"}};
 
             JSONArray f1 = new JSONArray();
             f1.put(filterGroup("class", "类型", arrOf(MOVIE_CLASS)));
-            f1.put(filterGroup("area",  "地区", arrOf(AREA_LIST)));
-            f1.put(filterGroup("year",  "年份", arrOf(YEAR_LIST)));
+            f1.put(filterGroup("area", "地区", arrOf(AREA_LIST)));
+            f1.put(filterGroup("year", "年份", arrOf(YEAR_LIST)));
             filters.put("1", f1);
 
             JSONArray f15 = new JSONArray();
             f15.put(filterGroup("class", "类型", arrOf(TV_CLASS)));
-            f15.put(filterGroup("area",  "地区", arrOf(AREA_LIST)));
-            f15.put(filterGroup("year",  "年份", arrOf(YEAR_LIST)));
+            f15.put(filterGroup("area", "地区", arrOf(AREA_LIST)));
+            f15.put(filterGroup("year", "年份", arrOf(YEAR_LIST)));
             filters.put("15", f15);
 
             JSONArray f30 = new JSONArray();
@@ -330,7 +214,6 @@ public class ChuJian extends Spider {
                 fa.put(filterGroup("year", "年份", arrOf(YEAR_SHORT)));
                 filters.put(tid, fa);
             }
-
             for (String tid : new String[]{"47", "60"}) {
                 JSONArray fa = new JSONArray();
                 fa.put(filterGroup("year", "年份", arrOf(YEAR_SHORT2)));
@@ -345,63 +228,53 @@ public class ChuJian extends Spider {
         }
     }
 
+    private JSONArray arrOf(String[][] data) throws Exception {
+        JSONArray a = new JSONArray();
+        for (String[] kv : data) {
+            JSONObject o = new JSONObject();
+            o.put("v", kv[0]); o.put("n", kv[1]);
+            a.put(o);
+        }
+        return a;
+    }
+
     private JSONObject filterGroup(String key, String name, JSONArray values) throws Exception {
         JSONObject g = new JSONObject();
-        g.put("key", key);
-        g.put("name", name);
-        g.put("value", values);
+        g.put("key", key); g.put("name", name); g.put("value", values);
         return g;
     }
 
-    // ============================================================
-    // homeVod（不变）
-    // ============================================================
     @Override
     public String homeVideoContent() {
         try {
             String html = fetchHtml(API_HOST + "/");
-            List<JSONObject> list = parseCards(html);
-            if (list.size() > 30) list = list.subList(0, 30);
-
-            JSONArray arr = new JSONArray();
-            for (JSONObject o : list) arr.put(o);
-
+            JSONArray arr = parseCards(html);
             JSONObject r = new JSONObject();
             r.put("list", arr);
             return r.toString();
         } catch (Exception e) {
-            SpiderDebug.log("homeVod error: " + e.getMessage());
             return "{\"list\":[]}";
         }
     }
 
-    // ============================================================
-    // category（用静态 Pattern）
-    // ============================================================
     @Override
-    public String categoryContent(String tid, String pg, boolean filter,
-                                  HashMap<String, String> extend) {
+    public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) {
         try {
             int page = 1;
             try { page = Integer.parseInt(pg); } catch (Exception ignored) {}
-
             String cls  = (extend != null && extend.get("class") != null) ? extend.get("class") : "";
             String area = (extend != null && extend.get("area")  != null) ? extend.get("area")  : "";
             String year = (extend != null && extend.get("year")  != null) ? extend.get("year")  : "";
 
-            StringBuilder path = new StringBuilder();
-            path.append("/index.php/vod/show/id/").append(tid);
+            StringBuilder path = new StringBuilder("/index.php/vod/show/id/").append(tid);
             if (!TextUtils.isEmpty(cls))  path.append("/class/").append(cls);
             if (!TextUtils.isEmpty(area)) path.append("/area/").append(area);
             if (!TextUtils.isEmpty(year)) path.append("/year/").append(year);
             if (page > 1) path.append("/page/").append(page);
             path.append(".html");
 
-            String url = API_HOST + path.toString();
-            SpiderDebug.log("分类URL: " + url);
-
-            String html = fetchHtml(url);
-            List<JSONObject> list = parseCards(html);
+            String html = fetchHtml(API_HOST + path.toString());
+            JSONArray list = parseCards(html);
 
             int pagecount = page + 1;
             List<Integer> pages = new ArrayList<>();
@@ -411,12 +284,9 @@ public class ChuJian extends Spider {
             }
             for (Integer p : pages) if (p > pagecount) pagecount = p;
 
-            JSONArray arr = new JSONArray();
-            for (JSONObject o : list) arr.put(o);
-
             JSONObject r = new JSONObject();
             r.put("page", page);
-            r.put("list", arr);
+            r.put("list", list);
             r.put("pagecount", pagecount);
             r.put("limit", 90);
             r.put("total", 999999);
@@ -427,9 +297,6 @@ public class ChuJian extends Spider {
         }
     }
 
-    // ============================================================
-    // detail（用静态 Pattern）
-    // ============================================================
     @Override
     public String detailContent(List<String> ids) {
         try {
@@ -440,24 +307,16 @@ public class ChuJian extends Spider {
 
             JSONObject info = new JSONObject();
             info.put("vod_id", id);
-            info.put("vod_name", "");
-            info.put("vod_pic", "");
-            info.put("vod_content", "");
-            info.put("vod_actor", "");
-            info.put("vod_director", "");
-            info.put("vod_year", "");
-            info.put("vod_remarks", "");
-            info.put("vod_play_from", "");
-            info.put("vod_play_url", "");
+            info.put("vod_name", ""); info.put("vod_pic", ""); info.put("vod_content", "");
+            info.put("vod_actor", ""); info.put("vod_director", ""); info.put("vod_year", ""); info.put("vod_remarks", "");
+            info.put("vod_play_from", ""); info.put("vod_play_url", "");
 
             String name = group("<h1[^>]*>([^<]+)</h1>", html, 1).trim();
             if (!TextUtils.isEmpty(name)) info.put("vod_name", name);
 
             String pic = group("<img[^>]*class=\"[^\"]*lazy[^\"]*\"[^>]*data-original=\"([^\"]+)\"", html, 1);
-            if (TextUtils.isEmpty(pic))
-                pic = group("<img[^>]*class=\"[^\"]*lazy[^\"]*\"[^>]*src=\"([^\"]+)\"", html, 1);
-            if (TextUtils.isEmpty(pic))
-                pic = group("<img[^>]*data-original=\"([^\"]+)\"", html, 1);
+            if (TextUtils.isEmpty(pic)) pic = group("<img[^>]*class=\"[^\"]*lazy[^\"]*\"[^>]*src=\"([^\"]+)\"", html, 1);
+            if (TextUtils.isEmpty(pic)) pic = group("<img[^>]*data-original=\"([^\"]+)\"", html, 1);
             if (!TextUtils.isEmpty(pic)) info.put("vod_pic", fixUrl(pic));
 
             String desc = group("<div[^>]*class=\"[^\"]*module-info-introduction-content[^\"]*\"[^>]*>([\\s\\S]*?)</div>", html, 1);
@@ -530,9 +389,6 @@ public class ChuJian extends Spider {
         }
     }
 
-    // ============================================================
-    // search（不变）
-    // ============================================================
     @Override
     public String searchContent(String wd, boolean quick) {
         return searchContent(wd, quick, "1");
@@ -543,28 +399,19 @@ public class ChuJian extends Spider {
         try {
             int page = 1;
             try { page = Integer.parseInt(pg); } catch (Exception ignored) {}
-
             String enc = URLEncoder.encode(wd == null ? "" : wd, "UTF-8");
             String url = API_HOST + "/index.php/vod/search.html?wd=" + enc + "&page=" + page;
             String html = fetchHtml(url);
 
-            List<JSONObject> list = new ArrayList<>();
-            Matcher m = Pattern.compile(
-                "<div[^>]*class=\"[^\"]*module-card-item[^\"]*\"[^>]*>([\\s\\S]*?)</div>\\s*</div>\\s*</div>"
-            ).matcher(html);
+            JSONArray list = new JSONArray();
+            Matcher m = Pattern.compile("<div[^>]*class=\"[^\"]*module-card-item[^\"]*\"[^>]*>([\\s\\S]*?)</div>\\s*</div>\\s*</div>").matcher(html);
             while (m.find()) {
                 String body = m.group(1);
-
                 String href = group("<a[^>]*href=\"([^\"]+)\"[^>]*class=\"[^\"]*module-card-item-poster[^\"]*\"", body, 1);
-                if (TextUtils.isEmpty(href))
-                    href = group("<a[^>]*href=\"([^\"]+)\"[^>]*>", body, 1);
-
+                if (TextUtils.isEmpty(href)) href = group("<a[^>]*href=\"([^\"]+)\"[^>]*>", body, 1);
                 String title = group("<strong>([^<]+)</strong>", body, 1);
-                if (TextUtils.isEmpty(title))
-                    title = group("module-card-item-title[^>]*>[\\s\\S]*?<a[^>]*>([^<]+)</a>", body, 1);
-
+                if (TextUtils.isEmpty(title)) title = group("module-card-item-title[^>]*>[\\s\\S]*?<a[^>]*>([^<]+)</a>", body, 1);
                 String note = group("<div[^>]*class=\"[^\"]*module-item-note[^\"]*\"[^>]*>([^<]*)</div>", body, 1);
-
                 String pic = group("<img[^>]*data-original=\"([^\"]+)\"", body, 1);
                 if (TextUtils.isEmpty(pic)) pic = group("<img[^>]*src=\"([^\"]+)\"", body, 1);
 
@@ -574,50 +421,31 @@ public class ChuJian extends Spider {
                     o.put("vod_name", title.trim());
                     o.put("vod_pic", fixUrl(pic));
                     o.put("vod_remarks", note.trim());
-                    list.add(o);
+                    list.put(o);
                 }
             }
-
-            JSONArray arr = new JSONArray();
-            for (JSONObject o : list) arr.put(o);
-
             JSONObject r = new JSONObject();
-            r.put("list", arr);
+            r.put("list", list);
             r.put("page", page);
             r.put("pagecount", 9999);
             return r.toString();
         } catch (Exception e) {
-            SpiderDebug.log("search error: " + e.getMessage());
             return "{\"list\":[]}";
         }
     }
 
-    // ============================================================
-    // ★★ playerContent —— 完全保留原逻辑 ★★
-    // ============================================================
+    // ★ playerContent 一字未改
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) {
         try {
-            SpiderDebug.log("=== play === " + flag + " | " + id);
-
-            if (!TextUtils.isEmpty(id) && id.matches("(?i).*\\.(m3u8|mp4|flv|mkv|webm|ts)(\\?.*)?$")) {
-                SpiderDebug.log("✅ 入参直链: " + id);
-                return buildPlayer(id);
-            }
+            if (!TextUtils.isEmpty(id) && id.matches("(?i).*\\.(m3u8|mp4|flv|mkv|webm|ts)(\\?.*)?$")) return buildPlayer(id);
 
             String pageUrl = id.startsWith("http") ? id : API_HOST + id;
             String html = fetchHtml(pageUrl);
-            if (TextUtils.isEmpty(html) || !html.contains("player_aaaa")) {
-                sleep(400);
-                html = fetchHtml(pageUrl);
-            }
-            if (TextUtils.isEmpty(html)) {
-                SpiderDebug.log("❌ 播放页为空");
-                return buildEmpty();
-            }
+            if (TextUtils.isEmpty(html) || !html.contains("player_aaaa")) { sleep(400); html = fetchHtml(pageUrl); }
+            if (TextUtils.isEmpty(html)) return buildEmpty();
 
             String realUrl = "";
-            String from = "";
             Matcher pm = PLAYER_AAAA_PATTERN.matcher(html);
             if (pm.find()) {
                 try {
@@ -626,50 +454,24 @@ public class ChuJian extends Spider {
                         realUrl = p.optString("url", "").replace("\\/", "/");
                         if (realUrl.startsWith("//")) realUrl = "https:" + realUrl;
                     }
-                    from = p.optString("from", "");
-                } catch (Exception e) {
-                    SpiderDebug.log("player_aaaa JSON 失败: " + e.getMessage());
-                }
+                } catch (Exception ignored) {}
             }
 
-            SpiderDebug.log("player.url: " + realUrl);
-            SpiderDebug.log("player.from: " + from);
-
-            if (!TextUtils.isEmpty(realUrl) && realUrl.matches("(?i).*\\.(m3u8|mp4|flv)(\\?.*)?$")) {
-                SpiderDebug.log("✅ 直连: " + realUrl);
-                return buildPlayer(realUrl);
-            }
+            if (!TextUtils.isEmpty(realUrl) && realUrl.matches("(?i).*\\.(m3u8|mp4|flv)(\\?.*)?$")) return buildPlayer(realUrl);
 
             if (!TextUtils.isEmpty(realUrl)) {
                 String tpl = getJxapiTemplate(html);
-                if (TextUtils.isEmpty(tpl)) {
-                    SpiderDebug.log("❌ 没拿到 jxapi 模板");
-                    return buildEmpty();
-                }
-
+                if (TextUtils.isEmpty(tpl)) return buildEmpty();
                 String apiUrl = tpl + URLEncoder.encode(realUrl, "UTF-8");
-                SpiderDebug.log("→ jxapi: " + apiUrl);
-
                 String resp = fetchHtml(apiUrl, jsonHeaders());
                 if (!TextUtils.isEmpty(resp)) {
                     try {
                         JSONObject j = new JSONObject(resp);
-                        if (j.optInt("code", 0) == 200 && j.has("url")) {
-                            String videoUrl = j.optString("url", "").replace("\\/", "/");
-                            String type = j.optString("type", "hls");
-                            SpiderDebug.log("✅ jxapi 返回 type=" + type + " url=" + videoUrl);
-                            return buildPlayer(videoUrl);
-                        }
-                        SpiderDebug.log("❌ jxapi 返回异常: " + resp.substring(0, Math.min(200, resp.length())));
-                    } catch (Exception e) {
-                        SpiderDebug.log("❌ JSON 失败: " + e.getMessage());
-                    }
+                        if (j.optInt("code", 0) == 200 && j.has("url")) return buildPlayer(j.optString("url").replace("\\/", "/"));
+                    } catch (Exception ignored) {}
                 }
             }
-
-            SpiderDebug.log("❌ 全部失败");
             return buildEmpty();
-
         } catch (Exception e) {
             SpiderDebug.log("playerContent error: " + e.getMessage());
             return buildEmpty();
@@ -683,35 +485,14 @@ public class ChuJian extends Spider {
             r.put("url", url);
             r.put("header", new JSONObject(m3u8Headers()));
             return r.toString();
-        } catch (Exception e) {
-            return "";
-        }
+        } catch (Exception e) { return ""; }
     }
 
     private String buildEmpty() {
         try {
             JSONObject r = new JSONObject();
-            r.put("parse", 0);
-            r.put("url", "");
-            r.put("header", new JSONObject(m3u8Headers()));
+            r.put("parse", 0); r.put("url", ""); r.put("header", new JSONObject(m3u8Headers()));
             return r.toString();
-        } catch (Exception e) {
-            return "";
-        }
-    }
-
-    // ============================================================
-    // init（不变）
-    // ============================================================
-    @Override
-    public void init(Context context, String extend) {
-        SpiderDebug.log("初见影视 init, API_HOST: " + API_HOST);
-    }
-
-    // ============================================================
-    // destroy（去掉 @Override）
-    // ============================================================
-    public void destroy() {
-        SpiderDebug.log("初见影视 destroy");
+        } catch (Exception e) { return ""; }
     }
 }
