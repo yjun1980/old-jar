@@ -24,7 +24,7 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class Nm extends Spider {
+public class NongMin extends Spider {
 
     private static final String DEFAULT_HOST = "https://vip.wwgz.cn:5200";
     private String host = DEFAULT_HOST;
