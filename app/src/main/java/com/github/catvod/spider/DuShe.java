@@ -103,7 +103,7 @@ public class DuShe extends Spider {
     }
 
     // ============================================================
-    // ★ fetchHtml —— 改成 PiaoHua 风格
+    // ★ fetchHtml —— PiaoHua 风格
     // ============================================================
     private String fetchHtml(String url) {
         return fetchHtml(url, null);
@@ -187,7 +187,7 @@ public class DuShe extends Spider {
     }
 
     // ============================================================
-    // buildCategoryUrl（保持不变）
+    // buildCategoryUrl（不变）
     // ============================================================
     private String buildCategoryUrl(String tid, HashMap<String, String> extend) {
         String classVal = extend != null && extend.get("class") != null ? extend.get("class") : "";
@@ -380,7 +380,6 @@ public class DuShe extends Spider {
             String content = group("<div[^>]*class=\"[^\"]*module-info-introduction-content[^\"]*\"[^>]*>[\\s\\S]*?<p>([\\s\\S]*?)</p>", html, 1);
             info.put("vod_content", cleanHtml(content));
 
-            // 线路 + 剧集
             List<String> tabs = extractTabs(html);
             List<String[]> episodes = extractEpisodes(html);
             List<Integer> sids = extractSids(episodes);
@@ -414,7 +413,6 @@ public class DuShe extends Spider {
                 }
             }
 
-            // 备用方案
             if (!info.has("vod_play_from") || info.optString("vod_play_from").isEmpty()) {
                 if (!episodes.isEmpty()) {
                     Map<Integer, List<String>> sidMap = new LinkedHashMap<>();
@@ -544,18 +542,18 @@ public class DuShe extends Spider {
             {"乡村", "乡村"}, {"情景", "情景"}, {"商战", "商战"}, {"网剧", "网剧"}
         };
         String[][] zy = {
+            {"", "全部"}, {"选秀", "选秀"}, {"情感", "情感"}, {"访谈", "访谈"},
+            {"播报", "播报"}, {"旅游", "旅游"}, {"音乐", "音乐"}, {"美食", "美食"},
+            {"纪实", "纪实"}, {"曲艺", "曲艺"}, {"生活", "生活"}, {"游戏互动", "游戏互动"},
+            {"财经", "财经"}, {"求职", "求职"}
+        };
+        String[][] dm = {
             {"", "全部"}, {"情感", "情感"}, {"科幻", "科幻"}, {"热血", "热血"},
             {"推理", "推理"}, {"搞笑", "搞笑"}, {"冒险", "冒险"}, {"萝莉", "萝莉"},
             {"校园", "校园"}, {"动作", "动作"}, {"机战", "机战"}, {"运动", "运动"},
             {"战争", "战争"}, {"少年", "少年"}, {"少女", "少女"}, {"社会", "社会"},
             {"原创", "原创"}, {"亲子", "亲子"}, {"益智", "益智"}, {"励志", "励志"},
             {"其他", "其他"}
-        };
-        String[][] dm = {
-            {"", "全部"}, {"选秀", "选秀"}, {"情感", "情感"}, {"访谈", "访谈"},
-            {"播报", "播报"}, {"旅游", "旅游"}, {"音乐", "音乐"}, {"美食", "美食"},
-            {"纪实", "纪实"}, {"曲艺", "曲艺"}, {"生活", "生活"}, {"游戏互动", "游戏互动"},
-            {"财经", "财经"}, {"求职", "求职"}
         };
         String[][] data;
         if ("dianying".equals(cat)) data = dy;
@@ -588,10 +586,10 @@ public class DuShe extends Spider {
             {"西班牙", "西班牙"}, {"俄罗斯", "俄罗斯"}, {"其它", "其它"}
         };
         String[][] zy = {
-            {"", "全部"}, {"国产", "国产"}, {"日本", "日本"}, {"欧美", "欧美"}, {"其他", "其他"}
+            {"", "全部"}, {"内地", "内地"}, {"港台", "港台"}, {"日韩", "日韩"}, {"欧美", "欧美"}
         };
         String[][] dm = {
-            {"", "全部"}, {"内地", "内地"}, {"港台", "港台"}, {"日韩", "日韩"}, {"欧美", "欧美"}
+            {"", "全部"}, {"国产", "国产"}, {"日本", "日本"}, {"欧美", "欧美"}, {"其他", "其他"}
         };
         String[][] data;
         if ("dianying".equals(cat)) data = dy;
@@ -794,4 +792,93 @@ public class DuShe extends Spider {
             if (!pJson.isEmpty()) {
                 try {
                     JSONObject pdata = new JSONObject(pJson);
-                    realUrl = pdata
+                    realUrl = pdata.optString("url", "").replace("\\/", "/");
+                    if (realUrl.startsWith("//")) realUrl = "https:" + realUrl;
+                    from = pdata.optString("from", "");
+                } catch (Exception e) {
+                    SpiderDebug.log("player_aaaa parse error: " + e.getMessage());
+                }
+            }
+
+            SpiderDebug.log("player.url = " + realUrl);
+            SpiderDebug.log("player.from = " + from);
+
+            // ④ 直链 m3u8/mp4 → parse:0
+            if (!realUrl.isEmpty() && realUrl.matches(".*\\.(m3u8|mp4|flv|mkv|webm|ts)(\\?.*)?$")) {
+                SpiderDebug.log("✅ 直链: " + realUrl);
+                return buildResult(0, realUrl, getM3u8Headers());
+            }
+
+            // ⑤ 第三方 → v.dushe.online 解析
+            if (!realUrl.isEmpty()) {
+                String jxUrl = PROXY_HOST + "/?url=" + urlEncode(realUrl)
+                             + "&t=" + urlEncode(from) + "&d=v2";
+                SpiderDebug.log("→ v.dushe.online: " + jxUrl);
+
+                String jxHtml = fetchHtml(jxUrl);
+                if (jxHtml.isEmpty()) {
+                    SpiderDebug.log("❌ v.dushe.online 空响应");
+                    return buildResult(0, "", null);
+                }
+
+                String configUrl = find(CONFIG_URL_PATTERN, jxHtml);
+                if (configUrl.isEmpty()) {
+                    SpiderDebug.log("❌ 没抠到 config.url");
+                    return buildResult(0, "", null);
+                }
+                SpiderDebug.log("config.url = " + configUrl);
+
+                String apiUrl = PROXY_HOST + "/api.php";
+                LinkedHashMap<String, String> postData = new LinkedHashMap<>();
+                postData.put("url", configUrl);
+                postData.put("time", "");
+                postData.put("key", "");
+                postData.put("token", "");
+
+                Map<String, String> h = new HashMap<>();
+                h.put("User-Agent", UA);
+                h.put("Content-Type", "application/x-www-form-urlencoded");
+                h.put("X-Requested-With", "XMLHttpRequest");
+                h.put("Referer", jxUrl);
+
+                String apiResp = "";
+                try {
+                    apiResp = OkHttp.post(apiUrl, postData, h).getBody();
+                } catch (Exception e) {
+                    SpiderDebug.log("❌ POST api.php error: " + e.getMessage());
+                }
+
+                if (apiResp == null || apiResp.isEmpty()) {
+                    SpiderDebug.log("❌ api.php 空响应");
+                    return buildResult(0, "", null);
+                }
+                SpiderDebug.log("api resp: " + (apiResp.length() > 300 ? apiResp.substring(0, 300) : apiResp));
+
+                try {
+                    JSONObject j = new JSONObject(apiResp);
+                    if (j.optInt("code", 0) == 200 && j.has("url")) {
+                        String m3u8 = j.optString("url").replace("\\/", "/");
+                        SpiderDebug.log("✅✅ 解析成功: " + m3u8);
+                        return buildResult(0, m3u8, getM3u8Headers());
+                    }
+                    SpiderDebug.log("❌ api code != 200");
+                } catch (Exception e) {
+                    SpiderDebug.log("❌ JSON error: " + e.getMessage());
+                }
+            }
+
+            SpiderDebug.log("❌ 全部失败");
+            return buildResult(0, "", null);
+        } catch (Exception e) {
+            SpiderDebug.log("playerContent error: " + e.getMessage());
+            return "";
+        }
+    }
+
+    // ============================================================
+    // destroy（去掉 @Override）
+    // ============================================================
+    public void destroy() {
+        SpiderDebug.log("DuShe destroy");
+    }
+}
